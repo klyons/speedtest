@@ -1,0 +1,76 @@
+﻿{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "PATH": "${env.PATH};C:/ws/vcpkg/installed/x64-windows/bin"
+      }
+    },
+    {
+      "name": "x64-debug",
+      "displayName": "x64 Debug",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS_DEBUG": "/Zi /Od /RTC1",
+        "CMAKE_C_FLAGS_DEBUG": "/Zi /Od /RTC1",
+        "CMAKE_EXE_LINKER_FLAGS_DEBUG": "/DEBUG",
+        "CMAKE_SHARED_LINKER_FLAGS_DEBUG": "/DEBUG"
+      }
+    },
+    {
+      "name": "x64-release",
+      "displayName": "x64 Release",
+      "inherits": "x64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS_RELEASE": "/O2",
+        "CMAKE_C_FLAGS_RELEASE": "/O2"
+      }
+    },
+    {
+      "name": "x86-debug",
+      "displayName": "x86 Debug",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS_DEBUG": "/Zi /Od /RTC1",
+        "CMAKE_C_FLAGS_DEBUG": "/Zi /Od /RTC1",
+        "CMAKE_EXE_LINKER_FLAGS_DEBUG": "/DEBUG",
+        "CMAKE_SHARED_LINKER_FLAGS_DEBUG": "/DEBUG"
+      }
+    },
+    {
+      "name": "x86-release",
+      "displayName": "x86 Release",
+      "inherits": "x86-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS_RELEASE": "/O2",
+        "CMAKE_C_FLAGS_RELEASE": "/O2"
+      }
+    }
+  ]
+}

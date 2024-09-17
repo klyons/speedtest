@@ -1,9 +1,29 @@
+/*
+Copyright(c) 2024 Transformative Optics.All rights reserved.
 
+This software and its documentation are considered to be
+proprietary and confidential information of Transformative Optics,
+and may not be disclosed to unauthorized individuals
+or used in any way not expressly authorized
+by the license agreement accompanying this product.
 
+Unauthorized copying of this file, via any medium,
+is strictly prohibited.Modification, reverse engineering, disassembly,
+or decompilation of this software is prohibited unless expressly permitted
+by a written agreement with Transformative Optics.
+
+----------------------------------------------------------
+Description:
+Basic implementation of tiff read.
+
+*/
 #include "TiffSrcFile.h"
 
 #include <sstream>
 
+/**
+ *  Open a .tiff image.
+*/
 TocErr_t
 TiffSrcFile::OpenFile(const char* pFilename)
 {
@@ -21,34 +41,38 @@ TiffSrcFile::OpenFile(const char* pFilename)
 
         // Resolution
         TIFFGetField(mPTiff, TIFFTAG_RESOLUTIONUNIT, &mResolutionUnits);
-        TIFFGetField(mPTiff, TIFFTAG_XRESOLUTION, &mResolutionX);
-        TIFFGetField(mPTiff, TIFFTAG_YRESOLUTION, &mResolutionY);
+        TIFFGetField(mPTiff, TIFFTAG_XRESOLUTION, &mResolutionX );
+        TIFFGetField(mPTiff, TIFFTAG_YRESOLUTION, &mResolutionY );
     }
     else {
-        nReturn = -1;
+        nReturn = kErrTiff_Open;
+        mPTiff = NULL;
     }
 
     return(nReturn);
 }
 
+
+/**
+ *  close a .tiff image.
+*/
 TocErr_t
-TiffSrcFile::CloseFile()
+TiffSrcFile::CloseFile( )
 {
     if (mPTiff != NULL) {
         TIFFClose(mPTiff);
         mPTiff = NULL;
-
-        ClearFile();
     }
+    ClearFile();
 
     return(kNoError);
 }
 
-void
+void 
 TiffSrcFile::ClearFile()
 {
-    mPTiff = NULL;
-    mWidth = 0;
+    mPTiff  = NULL;
+    mWidth  = 0;
     mHeight = 0;
     mBPP = 0;
     mSampPerPixel = 0;
@@ -66,7 +90,8 @@ TiffSrcFile::ClearFile()
     const char* pFilename = "MyImage.tif";
 
     nReturn = OpenFile(pFilename);
-    std::unique_ptr<uint16_t[]>			bufImg;
+
+    std::vector<uint16_t>    bufImg
     int			nEc = ReadMonochrome16( bufImg );
     CloseFile();
  *
@@ -74,65 +99,94 @@ TiffSrcFile::ClearFile()
  * @param  bufImg = ref to unique_ptr for uint16 values.
  * @return Error Code
  */
-
-int TiffSrcFile::ReadMonochrome(std::unique_ptr<uint16_t[]>& bufImg)
+int
+TiffSrcFile::ReadMonochrome( std::vector<uint16_t>& bufImg )
 {
-    int			nEc = -1;		// return number of scans read
+    int			ec = kErrTiff_PTiff;		    // return number of scans read
 
-    // Accept only:
-    //	16 bit
-    //	1 sample per pixel
-    //	Round scaneline out to uint16 - this is the widthRead
-    //  Readscanline and advance by widthRead.
-    //
-    tmsize_t		nScanLen = TIFFScanlineSize(mPTiff);
-    size_t			nScan16Round = (nScanLen + sizeof(uint16_t) - 1) / sizeof(uint16_t);
-    size_t			nLenBuffer = (nScan16Round * mHeight);
+    if (mPTiff != NULL)
+    {
+        // Accept only:
+        //	16 bit
+        //	1 sample per pixel
+        //	Round scaneline out to uint16 - this is the widthRead
+        //  Readscanline and advance by widthRead.
+        //
+        size_t			nLenBuffer = (mWidth * mHeight);
 
-    // CHeck to see that we're a uint16 monochrome image.
-    if (IsMonoTiff()) {
-        if (mBPP == 16) {
-            bufImg = std::unique_ptr<uint16_t[]>(new uint16_t[nLenBuffer]);
+        // CHeck to see that we're a uint16 monochrome image.
+        if (IsMonoTiff()) {
+            if (mBPP == 16) {
+                bufImg.resize(nLenBuffer);
+            }
+
+            if (bufImg.size() >= nLenBuffer)
+            {
+                // Read in the tiff image
+                size_t		nNext = 0;
+
+                for (unsigned nRow = 0; nRow < mHeight; nRow++)
+                {
+                    //                uint16_t* pScan = (bufImg.begin() + nNext);
+                    uint16_t* pScan = (bufImg.data() + nNext);
+
+                    TIFFReadScanline(mPTiff, pScan, nRow);
+
+                    nNext += mWidth;
+                }
+
+                // set return value
+                ec = kNoError;
+            }
         }
-
-        // Read in the tiff image
-        size_t		nNext = 0;
-
-        for (unsigned nRow = 0; nRow < mHeight; nRow++)
-        {
-            uint16_t* pScan = (bufImg.get() + nNext);
-
-            TIFFReadScanline(mPTiff, pScan, nRow);
-
-            nNext += nScan16Round;
-        }
-
-        // set return value
-        nEc = 0;
     }
 
-    return(nEc);
+    return(ec);
 }
 
-int TiffSrcFile::TestIt()
+
+TocErr_t 
+TiffSrcFile::ReadMonochrome( CTocMatrix<uint16_t> & bufImg )
 {
-    int			nReturn = 0;
-    const char* pFilename = "C:\\TOC_Data\\ImageCaptures\\NikonZ8_Captures\\ChromaBathCalFiles\\NikonZ8Lev0\\DSC_1605.TIFF";
+    int			ec = kErrTiff_PTiff;		    // return number of scans read
 
-    nReturn = OpenFile(pFilename);
+    if (mPTiff != NULL)
+    {
+        // Accept only:
+        //	16 bit
+        //	1 sample per pixel
+        //	Round scaneline out to uint16 - this is the widthRead
+        //  Readscanline and advance by widthRead.
+        //
+        size_t			nLenBuffer = (mWidth * mHeight);
 
-#if 0
-    uint32_t	config = 0;
-    uint16_t	nsamples = 0;
-    TIFFGetField(mPTiff, TIFFTAG_PLANARCONFIG, &config);
-    TIFFGetField(mPTiff, TIFFTAG_SAMPLESPERPIXEL, &nsamples);
-#endif // 0
+        // CHeck to see that we're a uint16 monochrome image.
+        if (IsMonoTiff()) {
+            if (mBPP == 16) {
+                ec = bufImg.Alloc( mWidth, mHeight );
+            }
 
-    std::unique_ptr<uint16_t[]>			bufImg;
-    int			nEc = ReadMonochrome(bufImg);
+            if (ec == kNoError )
+            {
+                // Read in the tiff image
+                size_t		nNext = 0;
 
-    CloseFile();
+                for (unsigned nRow = 0; nRow < mHeight; nRow++)
+                {
+                    //                uint16_t* pScan = (bufImg.begin() + nNext);
+                    uint16_t* pScan = (bufImg.data() + nNext);
 
-    return(nReturn);
+                    TIFFReadScanline(mPTiff, pScan, nRow);
+
+                    nNext += mWidth;
+                }
+
+                // set return value
+                ec = kNoError;
+            }
+        }
+    }
+
+    return(ec);
 }
 

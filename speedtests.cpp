@@ -130,8 +130,14 @@ Buffer<uint16_t> convertToHalideBuffer(std::unique_ptr<uint16_t[]>& bufImg, int 
 void demosaicImage(const char* input_filename, const char* output_filename) {
     try {
         // Read the input PGM image
+        std::string myFilename;
         TiffSrcFile inputImage;
-        std::string  myFilename = "C:\\ws\\sc_arch\\speedtests\\out\\build\\x64-debug\\LowerLeftQuadrant.tiff";
+        if (input_filename == nullptr || strlen(input_filename) == 0) {
+            myFilename = "C:\\ws\\sc_arch\\speedtests\\out\\build\\x64-debug\\LowerLeftQuadrant.tiff";
+        }
+        else {
+            myFilename = input_filename;
+        }
         if (inputImage.OpenFile(myFilename.c_str() ) != 0) {
             fprintf(stderr, "Failed to open TIFF file: %s\n", input_filename);
             return;
@@ -148,7 +154,7 @@ void demosaicImage(const char* input_filename, const char* output_filename) {
         printf("Read image data successfully\n");
 
         // Create an output buffer
-#if 1
+
 
     // The last lesson was quite involved, and scheduling complex
     // multi-stage pipelines is ahead of us. As an interlude, let's
@@ -168,14 +174,14 @@ void demosaicImage(const char* input_filename, const char* output_filename) {
         int nHeight = inputImage.getHeight();
         uint8_t         myStuff[100];
 
-        nWidth = 512;
-        nHeight = 256;
+        //nWidth = 512;
+        //nHeight = 256;
 //        Halide::Buffer<uint8_t>  haldBuffer( nWidth, nHeight );
         Buffer<int> result(8, 8);
 
-#else
+
         Buffer<uint16_t> halideBuffer = convertToHalideBuffer(bufImg, inputImage.getWidth(), inputImage.getHeight());
-#endif // 1
+
         Buffer<uint16_t> outBuffer(inputImage.getWidth(), inputImage.getHeight());
         // Call the demosaicing function
         try {
@@ -329,55 +335,91 @@ void medianFilter(const std::string& filename, int kernel_size, float variance_t
 //bayer Demosaic 
 void BayerDemosaicHalide(const std::string& inputFilename, const std::string& outputFilename) {
     try {
-        // Load the PGM image using the PGMImage class
-        PGMImage inputImage(inputFilename);
+        std::cout << "Starting main" << std::endl;
 
-        uint16_t width = inputImage.width();
-        uint16_t height = inputImage.height();
-        uint16_t* raw_data = inputImage.data();
+        // Read the input TIFF image
+        std::string myFilename;
+        TiffSrcFile inputImage;
+        if (inputFilename.empty()) {
+            myFilename = "C:\\ws\\sc_arch\\speedtests\\out\\build\\x64-debug\\LowerLeftQuadrant.tiff";
+        }
+        else {
+            myFilename = inputFilename;
+        }
+        if (inputImage.OpenFile(myFilename.c_str()) != 0) {
+            fprintf(stderr, "Failed to open TIFF file: %s\n", myFilename.c_str());
+            return;
+        }
+        printf("Opened TIFF file: %s\n", myFilename.c_str());
 
+        std::unique_ptr<uint16_t> bufImg;
+        if (inputImage.ReadMonochrome(bufImg) != 0) {
+            fprintf(stderr, "Failed to read image data\n");
+            inputImage.CloseFile();
+            return;
+        }
+        printf("Read image data successfully\n");
+
+        // Assuming TiffSrcFile has methods to get width and height
+        uint16_t width = inputImage.getWidth();
+        uint16_t height = inputImage.getHeight();
+        printf("Width: %u, Height: %u\n", width, height);
+
+        uint16_t* raw_data = bufImg.get();
         if (!raw_data) {
             std::cerr << "Failed to read image data" << std::endl;
             return;
         }
 
+        // Print the first few values of raw_data to verify its content
+        std::cout << "First few values of raw_data: ";
+        for (int i = 0; i < 10; ++i) {
+            std::cout << raw_data[i] << " ";
+        }
+        std::cout << std::endl;
+
         // Convert the loaded image data to a Halide Buffer
-        Buffer<uint16_t> input(raw_data, { width, height });
+        Halide::Buffer<uint16_t> input(raw_data, width, height);
+        std::cout << "Halide buffer created successfully" << std::endl;
 
         // Define the Halide variables
-        Var x("x"), y("y"), c("c");
+        Halide::Var x("x"), y("y"), c("c");
 
-        // Defin  e the Halide function
-        Func demosaic("demosaic");
+        // Define the Halide function
+        Halide::Func demosaic("demosaic");
 
         // Define the Bayer pattern
-        Expr R = input(x, y);
-        Expr G = input(x, y);
-        Expr B = input(x, y);
+        Halide::Expr R = input(x, y);
+        Halide::Expr G = input(x, y);
+        Halide::Expr B = input(x, y);
 
         // Apply the Bayer pattern
-        R = select((x % 2 == 0) && (y % 2 == 0), input(x, y),
+        R = Halide::select((x % 2 == 0) && (y % 2 == 0), input(x, y),
             (x % 2 == 1) && (y % 2 == 0), (input(x - 1, y) + input(x + 1, y)) / 2,
             (x % 2 == 0) && (y % 2 == 1), (input(x, y - 1) + input(x, y + 1)) / 2,
             (input(x - 1, y - 1) + input(x + 1, y - 1) + input(x - 1, y + 1) + input(x + 1, y + 1)) / 4);
 
-        G = select((x % 2 == 1) && (y % 2 == 1), input(x, y),
+        G = Halide::select((x % 2 == 1) && (y % 2 == 1), input(x, y),
             (x % 2 == 0) && (y % 2 == 1), (input(x - 1, y) + input(x + 1, y)) / 2,
             (x % 2 == 1) && (y % 2 == 0), (input(x, y - 1) + input(x, y + 1)) / 2,
             (input(x - 1, y - 1) + input(x + 1, y - 1) + input(x - 1, y + 1) + input(x + 1, y + 1)) / 4);
 
-        B = select((x % 2 == 1) && (y % 2 == 1), input(x, y),
+        B = Halide::select((x % 2 == 1) && (y % 2 == 1), input(x, y),
             (x % 2 == 0) && (y % 2 == 1), (input(x - 1, y) + input(x + 1, y)) / 2,
             (x % 2 == 1) && (y % 2 == 0), (input(x, y - 1) + input(x, y + 1)) / 2,
             (input(x - 1, y - 1) + input(x + 1, y - 1) + input(x - 1, y + 1) + input(x + 1, y + 1)) / 4);
 
         // Combine the channels
-        demosaic(x, y, c) = select(c == 0, R,
+        demosaic(x, y, c) = Halide::select(c == 0, R,
             c == 1, G,
             B);
 
+        std::cout << "Halide function defined" << std::endl;
+
         // Realize the function
-        Buffer<uint16_t> output = demosaic.realize({ width, height, 3 });
+        Halide::Buffer<uint16_t> output = demosaic.realize({ width, height, 3 });
+
+        std::cout << "Halide function realized" << std::endl;
 
         // Create an output PGM image
         PGMImage outputImage(width, height);
@@ -404,7 +446,6 @@ void BayerDemosaicHalide(const std::string& inputFilename, const std::string& ou
     }
 }
 
-
 int main() 
 {
     printf("Starting main\n");
@@ -412,7 +453,7 @@ int main()
     //inputImage.ReadMonochrome();
     //double medianFilterTime = timeFunction(medianFilter, "bay_dust.jpg", 3, 80); 
     //loadTiff("LowerLeftQuadrant.tiff");
-    demosaicImage("UpperLeftQuadrant.tiff", "LLQ.tiff");
+    BayerDemosaicHalide("C:\\ws\\speedtests\\UPQ.tiff", "C:\\ws\\speedtest\\Finished.tiff");
     //double halideDemosaicTime = timeFunction(BayerDemosaicHalide, "LowerLeftQuadrant.tiff", "test1.png"); //demosaic_image
     //double bayerMosaicTime = timeFunction(demosaicImage, "LowerLeftQuadrant.tiff", "test.tiff");
     //std::cout << "Halide execution time: " << halideDemosaicTime << " seconds" << std::endl;
